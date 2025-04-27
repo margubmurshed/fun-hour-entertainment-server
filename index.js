@@ -185,5 +185,5 @@ const sslOptions = {
 
 https.createServer(sslOptions, app).listen(port, '0.0.0.0', () => {
   console.log("Fun Hour Entertainment HTTPS Server is running 🚀");
-  console.log(`Access it at: https://192.168.0.102:${port}/`);
+  console.log(`Access it at: https://192.168.8.10:${port}/`);
 });
