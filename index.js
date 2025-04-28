@@ -2,7 +2,7 @@ const express = require("express");
 const https = require('https');
 const fs = require('fs');
 const cors = require("cors");
-const os = require('os');
+const sharp = require('sharp'); // <-- Import sharp at the top
 const { createCanvas } = require('canvas');
 const escpos = require("escpos");
 escpos.Network = require('escpos-network');
@@ -16,6 +16,7 @@ const port = process.env.PORT || 5000;
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use('/assets', express.static('assets'));
 
 // MongoDB URI
 const uri = `mongodb+srv://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@cluster0.hrq6pyr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -142,6 +143,9 @@ async function generateArabicTextImage(text, fontSize = 28) {
 
 
 
+
+
+// Update your /print endpoint
 app.post('/print', async (req, res) => {
   try {
     const {
@@ -161,19 +165,24 @@ app.post('/print', async (req, res) => {
     const createdAtFormatted = new Date(createdAt).toLocaleString();
     const logoPath = path.join(__dirname, 'assets', 'logo.png');
 
-    // Load logo image
+    // Step 1: Resize logo with Sharp
+    const resizedLogoBuffer = await sharp(logoPath)
+      .resize(200, 100) // width, height you want
+      .png()
+      .toBuffer();
+
+    // Step 2: Load resized logo into escpos.Image
     const logo = await new Promise((resolve, reject) => {
-      escpos.Image.load(logoPath, (image) => {
-        if (image) {
-          image.resize(200, 100); // Make logo small
-          resolve(image);
-        } else reject(new Error('Failed to load logo image'));
+      escpos.Image.load(resizedLogoBuffer, (image) => { // pass buffer here
+        if (image) resolve(image);
+        else reject(new Error('Failed to load resized logo image'));
       });
     });
 
-    // Render Arabic company name to an image
+    // Step 3: Render Arabic company name to an image
     const companyNameImage = await generateArabicTextImage("ساعة فرح للترفيه", 28);
 
+    // Step 4: Print
     await new Promise((resolve, reject) => {
       device.open(async (error) => {
         if (error) return reject(error);
