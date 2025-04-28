@@ -31,20 +31,20 @@ async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
-    
+
 
     const fheDB = client.db("fheDB");
     const receiptsCollection = fheDB.collection("receipts");
     const cashesCollection = fheDB.collection("cashes");
     const productsCollection = fheDB.collection("products");
 
-    app.get("/receipts", async(req, res) => {
-        const cursor = receiptsCollection.find();
-        const result = await cursor.toArray();
-        res.send(result)
+    app.get("/receipts", async (req, res) => {
+      const cursor = receiptsCollection.find();
+      const result = await cursor.toArray();
+      res.send(result)
     })
 
-    app.get("/cashes", async(req, res) => {
+    app.get("/cashes", async (req, res) => {
       const cursor = cashesCollection.find();
       const result = await cursor.toArray();
       res.send(result)
@@ -52,64 +52,64 @@ async function run() {
 
     app.get("/cashes/:email", async (req, res) => {
       const email = req.params.email;
-    
+
       const result = await cashesCollection.findOne({
         cashierEmail: email,
-        closingCashAmount: null, 
+        closingCashAmount: null,
       });
-    
+
       res.send(result);
     });
 
-    app.get("/products", async(req, res) => {
+    app.get("/products", async (req, res) => {
       const cursor = productsCollection.find();
       const result = await cursor.toArray();
       res.send(result)
     })
 
-    app.post("/cashes", async(req, res) => {
+    app.post("/cashes", async (req, res) => {
       console.log(req.body, "post cashes")
       const data = req.body;
       const result = await cashesCollection.insertOne(data);
-        res.send(result)
+      res.send(result)
     })
 
-    app.post("/receipts", async(req, res) => {
-        const receipt = req.body;
-        const result = await receiptsCollection.insertOne(receipt);
-        res.send(result)
+    app.post("/receipts", async (req, res) => {
+      const receipt = req.body;
+      const result = await receiptsCollection.insertOne(receipt);
+      res.send(result)
     })
-    app.post("/products", async(req, res) => {
-        const product = req.body;
-        const result = await productsCollection.insertOne(product);
-        res.send(result)
+    app.post("/products", async (req, res) => {
+      const product = req.body;
+      const result = await productsCollection.insertOne(product);
+      res.send(result)
     })
 
-    app.put("/products/:id", async(req, res) => {
+    app.put("/products/:id", async (req, res) => {
       const id = req.params.id;
       const body = req.body;
-      const result = await productsCollection.updateOne({_id: new ObjectId(id)}, {$set: body});
-      res.send(result);
-    })
-  
-
-    app.patch("/cashes/:id", async(req, res) => {
-      const id = req.params.id;
-      const body = req.body;
-      const result = await cashesCollection.updateOne({_id: new ObjectId(id)}, {$set: body});
+      const result = await productsCollection.updateOne({ _id: new ObjectId(id) }, { $set: body });
       res.send(result);
     })
 
-    app.delete("/products/:id", async(req,res) => {
+
+    app.patch("/cashes/:id", async (req, res) => {
       const id = req.params.id;
-      const result = await productsCollection.deleteOne({_id: new ObjectId(id)});
+      const body = req.body;
+      const result = await cashesCollection.updateOne({ _id: new ObjectId(id) }, { $set: body });
+      res.send(result);
+    })
+
+    app.delete("/products/:id", async (req, res) => {
+      const id = req.params.id;
+      const result = await productsCollection.deleteOne({ _id: new ObjectId(id) });
       res.send(result);
     })
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
-  } catch(e) {
+  } catch (e) {
     console.log(e.message)
   }
 }
@@ -117,60 +117,138 @@ run();
 
 
 app.get("/", (req, res) => {
-    res.send("Server is running")
+  res.send("Server is running")
 })
 
 app.post('/print', async (req, res) => {
   try {
-    console.log("Received print request:", req.body);
-    const { customerName, mobileNumber, services, products, total, vat, paymentType, createdAt } = req.body;
+    const {
+      customerName,
+      mobileNumber,
+      services = [],
+      products = [],
+      total,
+      vat,
+      paymentType,
+      createdAt
+    } = req.body;
 
-    const device = new escpos.Network('192.168.8.37'); // Your printer IP
+    const device = new escpos.Network('192.168.8.37');
     const printer = new escpos.Printer(device);
 
-    device.open(function () {
-      const createdAtFormatted = new Date(createdAt).toLocaleString(); // Format nicely
+    const createdAtFormatted = new Date(createdAt).toLocaleString();
+    const logoPath = path.join(__dirname, 'assets', 'logo.png');
+    const image = await escpos.Image.load(logoPath);
 
+    device.open(() => {
       printer
         .align('ct')
-        .style('b')
-        .size(0, 0) // small font
-        .text('    Fun Hour Entertainment    ')
-        .text('------------------------------')
-        .align('lt')
-        .text(` Customer: ${customerName}`)
-        .text(` Mobile: ${mobileNumber}`)
-        .text(' ')
-        .text(' Services:')
-        .tableCustom(
-          services.map(service => ({
-            text: `${service.name} - ${service.price} SAR`,
-            align: "LEFT",
-            width: 1,
-            style: 'NORMAL'
-          }))
-        )
-        .text(' ')
-        .text(' Products:')
-        .tableCustom(
-          products.map(product => ({
-            text: `${product.name} x ${product.quantity} - ${(product.price * product.quantity).toFixed(2)} SAR`,
-            align: "LEFT",
-            width: 1,
-            style: 'NORMAL'
-          }))
-        )
-        .text(' ')
-        .text(` VAT: ${vat.toFixed(2)} SAR`)
-        .text(` Total: ${total.toFixed(2)} SAR`)
-        .text(` Payment Type: ${paymentType}`)
-        .text(' ')
-        .text(` Printed At: ${createdAtFormatted}`)
+        .image(image, 's8')
+        .then(() => {
+          printer
+            .size(0, 0) // 👈 Smallest font size
+            .text('ساعة فرح للترفيه')
+            .text('VAT: 6312592186100003')
+            .text('------------------------------')
+            .align('lt')
+            .text(`Customer: ${customerName}`)
+            .text(`Mobile: ${mobileNumber}`)
+            .text(' ')
+            .text('Services:')
+            .tableCustom(services.map(service => ({
+              text: `${service.name} - ${service.price} SAR`,
+              align: "LEFT",
+              width: 1,
+              style: 'NORMAL'
+            })))
+            .text(' ')
+            .text('Products:')
+            .tableCustom(products.map(product => ({
+              text: `${product.name} x ${product.quantity} - ${(product.price * product.quantity).toFixed(2)} SAR`,
+              align: "LEFT",
+              width: 1,
+              style: 'NORMAL'
+            })))
+            .text(' ')
+            .text(`VAT: ${vat.toFixed(2)} SAR`)
+            .text(`Total: ${total.toFixed(2)} SAR`)
+            .text(`Payment Type: ${paymentType}`)
+            .text(' ')
+            .text(`Printed At: ${createdAtFormatted}`)
+            .align('ct')
+            .text('Thank you for visiting!')
+            .text('------------------------------')
+            .cut()
+            .close();
+        });
+    });
+
+    res.send({ message: 'Printing...' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send(`Failed to print receipt: ${err.message}`);
+  }
+});
+app.post('/print', async (req, res) => {
+  try {
+    const {
+      customerName,
+      mobileNumber,
+      services = [],
+      products = [],
+      total,
+      vat,
+      paymentType,
+      createdAt
+    } = req.body;
+
+    const device = new escpos.Network('192.168.8.37');
+    const printer = new escpos.Printer(device);
+
+    const createdAtFormatted = new Date(createdAt).toLocaleString();
+    const logoPath = path.join(__dirname, 'assets', 'logo.png');
+    const image = await escpos.Image.load(logoPath);
+
+    device.open(() => {
+      printer
         .align('ct')
-        .text('Thank you for visiting!')
-        .text('------------------------------')
-        .cut()
-        .close();
+        .image(image, 's8')
+        .then(() => {
+          printer
+            .text('ساعة فرح للترفيه')
+            .text('VAT: 6312592186100003')
+            .text('------------------------------')
+            .align('lt')
+            .text(`Customer: ${customerName}`)
+            .text(`Mobile: ${mobileNumber}`)
+            .text(' ')
+            .text('Services:')
+            .tableCustom(services.map(service => ({
+              text: `${service.name} - ${service.price} SAR`,
+              align: "LEFT",
+              width: 1,
+              style: 'NORMAL'
+            })))
+            .text(' ')
+            .text('Products:')
+            .tableCustom(products.map(product => ({
+              text: `${product.name} x ${product.quantity} - ${(product.price * product.quantity).toFixed(2)} SAR`,
+              align: "LEFT",
+              width: 1,
+              style: 'NORMAL'
+            })))
+            .text(' ')
+            .text(`VAT: ${vat.toFixed(2)} SAR`)
+            .text(`Total: ${total.toFixed(2)} SAR`)
+            .text(`Payment Type: ${paymentType}`)
+            .text(' ')
+            .text(`Printed At: ${createdAtFormatted}`)
+            .align('ct')
+            .text('Thank you for visiting!')
+            .text('------------------------------')
+            .cut()
+            .close();
+        });
     });
 
     res.send({ message: 'Printing...' });
