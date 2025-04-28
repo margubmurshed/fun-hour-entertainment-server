@@ -112,18 +112,26 @@ app.get("/", (req, res) => {
   res.send("Server is running");
 });
 
-// Helper: generate Arabic text as image buffer
-async function generateArabicTextBuffer(text, fontSize = 28) {
+// Helper: Save Arabic text as temporary image file
+const saveArabicTextAsImage = async (text, filename, fontSize = 28) => {
   const canvas = createCanvas(384, fontSize + 20);
   const ctx = canvas.getContext("2d");
 
   ctx.fillStyle = "black";
   ctx.font = `${fontSize}px "Arial"`;
   ctx.textAlign = "center";
-  ctx.direction = "rtl";
+  ctx.direction = "rtl"; // Arabic right-to-left
   ctx.fillText(text, 192, fontSize);
 
-  return canvas.toBuffer("image/png");
+  const buffer = canvas.toBuffer("image/png");
+  const filePath = path.join(__dirname, 'temp', filename);
+  fs.writeFileSync(filePath, buffer);
+  return filePath;
+};
+
+// Ensure temp folder exists
+if (!fs.existsSync(path.join(__dirname, 'temp'))) {
+  fs.mkdirSync(path.join(__dirname, 'temp'));
 }
 
 // /print endpoint
@@ -147,85 +155,129 @@ app.post("/print", async (req, res) => {
 
     const logoPath = path.join(__dirname, "assets", "logo.png");
 
-    const logoImage = await new Promise((resolve, reject) => {
-      escpos.Image.load(logoPath, (image) => {
-        if (image) resolve(image);
-        else reject(new Error("فشل تحميل الشعار"));
-      });
-    });
-
     await new Promise((resolve, reject) => {
       device.open(async (error) => {
         if (error) return reject(error);
 
         try {
           await printer.align("ct");
-          await printer.image(logoImage, "d24");
 
-          const companyNameBuffer = await generateArabicTextBuffer("ساعة فرح للترفيه", 32);
-          const companyNameImage = await new Promise((resolve, reject) => {
-            escpos.Image.load(companyNameBuffer, (img) => {
-              if (img) resolve(img);
-              else reject(new Error("فشل تحميل اسم الشركة"));
+          // Resize logo and save temporarily
+          const resizedLogoPath = path.join(__dirname, "temp", "logo_resized.png");
+          await sharp(logoPath).resize(200, 100).toFile(resizedLogoPath);
+
+          const logoImage = await new Promise((resolve, reject) => {
+            escpos.Image.load(resizedLogoPath, (image) => {
+              if (image) resolve(image);
+              else reject(new Error("Failed to load logo image"));
             });
           });
 
-          await printer.align("ct");
+          await printer.image(logoImage, "d24");
+
+          // Company Name
+          const companyNamePath = await saveArabicTextAsImage("ساعة فرح للترفيه", "company_name.png", 32);
+          const companyNameImage = await new Promise((resolve, reject) => {
+            escpos.Image.load(companyNamePath, (img) => {
+              if (img) resolve(img);
+              else reject(new Error("Failed to load company name image"));
+            });
+          });
+
           await printer.image(companyNameImage, "d24");
 
-          await printer.align("ct");
           await printer.text("الرقم الضريبي: 6312592186100003");
           await printer.text("--------------------------------");
 
-          const customerBuffer = await generateArabicTextBuffer(`اسم العميل: ${customerName}`);
-          const mobileBuffer = await generateArabicTextBuffer(`رقم الجوال: ${mobileNumber}`);
-          const dateBuffer = await generateArabicTextBuffer(`التاريخ: ${createdAtFormatted}`);
+          // Customer Info
+          const customerNamePath = await saveArabicTextAsImage(`اسم العميل: ${customerName}`, "customer_name.png");
+          const mobileNumberPath = await saveArabicTextAsImage(`رقم الجوال: ${mobileNumber}`, "mobile_number.png");
+          const createdAtPath = await saveArabicTextAsImage(`التاريخ: ${createdAtFormatted}`, "created_at.png");
 
-          await printer.image(customerBuffer, "d24");
-          await printer.image(mobileBuffer, "d24");
-          await printer.image(dateBuffer, "d24");
+          const customerNameImage = await new Promise((resolve, reject) => {
+            escpos.Image.load(customerNamePath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
+          });
+          const mobileNumberImage = await new Promise((resolve, reject) => {
+            escpos.Image.load(mobileNumberPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
+          });
+          const createdAtImage = await new Promise((resolve, reject) => {
+            escpos.Image.load(createdAtPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
+          });
+
+          await printer.image(customerNameImage, "d24");
+          await printer.image(mobileNumberImage, "d24");
+          await printer.image(createdAtImage, "d24");
           await printer.text("--------------------------------");
 
           let counter = 1;
 
           if (services.length > 0) {
-            const serviceHeader = await generateArabicTextBuffer("الخدمات:");
-            await printer.image(serviceHeader, "d24");
+            const serviceHeaderPath = await saveArabicTextAsImage("الخدمات:", "services_header.png");
+            const serviceHeaderImage = await new Promise((resolve, reject) => {
+              escpos.Image.load(serviceHeaderPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
+            });
+            await printer.image(serviceHeaderImage, "d24");
 
-            for (let service of services) {
+            for (const service of services) {
               const serviceLine = `${counter++}- ${service.name} - ${service.price} ريال`;
-              const serviceBuffer = await generateArabicTextBuffer(serviceLine);
-              await printer.image(serviceBuffer, "d24");
+              const servicePath = await saveArabicTextAsImage(serviceLine, `service_${counter}.png`);
+              const serviceImage = await new Promise((resolve, reject) => {
+                escpos.Image.load(servicePath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
+              });
+              await printer.image(serviceImage, "d24");
             }
             await printer.text("--------------------------------");
           }
 
           if (products.length > 0) {
-            const productHeader = await generateArabicTextBuffer("المنتجات:");
-            await printer.image(productHeader, "d24");
+            const productsHeaderPath = await saveArabicTextAsImage("المنتجات:", "products_header.png");
+            const productsHeaderImage = await new Promise((resolve, reject) => {
+              escpos.Image.load(productsHeaderPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
+            });
+            await printer.image(productsHeaderImage, "d24");
 
-            for (let product of products) {
+            for (const product of products) {
               const productLine = `${counter++}- ${product.name} ×${product.quantity} - ${(product.price * product.quantity).toFixed(2)} ريال`;
-              const productBuffer = await generateArabicTextBuffer(productLine);
-              await printer.image(productBuffer, "d24");
+              const productPath = await saveArabicTextAsImage(productLine, `product_${counter}.png`);
+              const productImage = await new Promise((resolve, reject) => {
+                escpos.Image.load(productPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
+              });
+              await printer.image(productImage, "d24");
             }
             await printer.text("--------------------------------");
           }
 
-          const vatBuffer = await generateArabicTextBuffer(`ضريبة القيمة المضافة: ${vat.toFixed(2)} ريال`);
-          const totalBuffer = await generateArabicTextBuffer(`الإجمالي: ${total.toFixed(2)} ريال`);
-          const paymentBuffer = await generateArabicTextBuffer(`طريقة الدفع: ${paymentType}`);
-          const vatIncludedBuffer = await generateArabicTextBuffer("15% ضريبة القيمة المضافة مشمولة في الإجمالي");
+          // Total and Payment
+          const vatPath = await saveArabicTextAsImage(`ضريبة القيمة المضافة: ${vat.toFixed(2)} ريال`, "vat.png");
+          const totalPath = await saveArabicTextAsImage(`الإجمالي: ${total.toFixed(2)} ريال`, "total.png");
+          const paymentPath = await saveArabicTextAsImage(`طريقة الدفع: ${paymentType}`, "payment.png");
+          const vatIncludedPath = await saveArabicTextAsImage("15% ضريبة القيمة المضافة مشمولة في الإجمالي", "vat_included.png");
 
-          await printer.image(vatBuffer, "d24");
-          await printer.image(totalBuffer, "d24");
-          await printer.image(paymentBuffer, "d24");
-          await printer.image(vatIncludedBuffer, "d24");
+          const vatImage = await new Promise((resolve, reject) => {
+            escpos.Image.load(vatPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
+          });
+          const totalImage = await new Promise((resolve, reject) => {
+            escpos.Image.load(totalPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
+          });
+          const paymentImage = await new Promise((resolve, reject) => {
+            escpos.Image.load(paymentPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
+          });
+          const vatIncludedImage = await new Promise((resolve, reject) => {
+            escpos.Image.load(vatIncludedPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
+          });
+
+          await printer.image(vatImage, "d24");
+          await printer.image(totalImage, "d24");
+          await printer.image(paymentImage, "d24");
+          await printer.image(vatIncludedImage, "d24");
 
           await printer.text("--------------------------------");
 
-          const thankYouBuffer = await generateArabicTextBuffer("شكراً لزيارتكم!");
-          await printer.image(thankYouBuffer, "d24");
+          const thankYouPath = await saveArabicTextAsImage("شكراً لزيارتكم!", "thank_you.png");
+          const thankYouImage = await new Promise((resolve, reject) => {
+            escpos.Image.load(thankYouPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
+          });
+          await printer.image(thankYouImage, "d24");
 
           await printer.cut();
           await printer.close();
@@ -238,7 +290,6 @@ app.post("/print", async (req, res) => {
     });
 
     res.send({ message: "تم بدء الطباعة." });
-
   } catch (error) {
     console.error("خطأ في الطباعة:", error);
     res.status(500).send(`فشل في الطباعة: ${error.message}`);
@@ -252,5 +303,6 @@ const sslOptions = {
 };
 
 https.createServer(sslOptions, app).listen(port, "0.0.0.0", () => {
-  console.log("\ud83d\ude80 \u062e\u0627\u062f\u0645 \u0633\u0627\u0639\u0629 \u0641\u0631\u062d \u064a\u0639\u0645\u0644 \u0639\u0644\u0649 HTTPS");
+  console.log("🚀 خادم ساعة فرح يعمل على HTTPS");
 });
+
