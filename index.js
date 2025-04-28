@@ -62,6 +62,35 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/receipts/cash-session/:cashId", async (req, res) => {
+      try {
+        const cashId = req.params.cashId;
+        const cash = await cashesCollection.findOne({ _id: new ObjectId(cashId) });
+    
+        if (!cash) {
+          return res.status(404).send({ message: "Cash session not found." });
+        }
+    
+        const openTime = new Date(cash.openingCashTime); // openingCashTime is a timestamp
+        const closeTime = cash.closingCashTime ? new Date(cash.closingCashTime) : new Date();
+    
+        const receipts = await receiptsCollection.find({
+          createdAt: {
+            $gte: openTime.getTime(), // convert to timestamp number
+            $lte: closeTime.getTime()
+          }
+        }).toArray();
+    
+        res.send(receipts);
+      } catch (error) {
+        console.error("Failed to fetch receipts for cash session:", error);
+        res.status(500).send({ message: "Internal server error." });
+      }
+    });
+    
+    
+    
+
     app.post("/products", async (req, res) => {
       const product = req.body;
       const result = await productsCollection.insertOne(product);
@@ -94,10 +123,29 @@ async function run() {
       res.send(result);
     });
 
-    app.post("/receipts", async (req, res) => {
-      const receipt = req.body;
-      const result = await receiptsCollection.insertOne(receipt);
-      res.send(result);
+    app.post('/receipts', async (req, res) => {
+      try {
+        const receiptData = req.body;
+        const { cashId } = receiptData;
+    
+        if (!cashId) {
+          return res.status(400).json({ message: "Missing cashId in receipt" });
+        }
+    
+        // How many receipts exist for this cash session?
+        const count = await receiptsCollection.countDocuments({ cashId });
+    
+        // Assign serial
+        receiptData.serial = count + 1;
+    
+        // Insert receipt
+        const result = await receiptsCollection.insertOne(receiptData);
+    
+        res.status(201).json({ insertedId: result.insertedId, serial: receiptData.serial });
+      } catch (error) {
+        console.error("Failed to save receipt:", error);
+        res.status(500).json({ message: "Failed to save receipt" });
+      }
     });
 
     await client.db("admin").command({ ping: 1 });
@@ -112,7 +160,6 @@ app.get("/", (req, res) => {
   res.send("Server is running");
 });
 
-// Helper: Save Arabic text as temporary image file
 const saveArabicTextAsImage = async (text, filename, fontSize = 28) => {
   const canvas = createCanvas(384, fontSize + 20);
   const ctx = canvas.getContext("2d");
@@ -127,6 +174,12 @@ const saveArabicTextAsImage = async (text, filename, fontSize = 28) => {
   const filePath = path.join(__dirname, 'temp', filename);
   fs.writeFileSync(filePath, buffer);
   return filePath;
+};
+
+// Helper to convert number to Arabic
+const toArabicNumber = (number) => {
+  const arabicNumbers = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+  return number.toString().split('').map(digit => arabicNumbers[digit] || digit).join('');
 };
 
 // Ensure temp folder exists
@@ -145,7 +198,8 @@ app.post("/print", async (req, res) => {
       total,
       vat,
       paymentType,
-      createdAt
+      createdAt,
+      serial
     } = req.body;
 
     const device = new escpos.Network("192.168.8.37");
@@ -188,6 +242,14 @@ app.post("/print", async (req, res) => {
 
           await printer.text("VAT : 6312592186100003");
           await printer.text("--------------------------------");
+
+          // Serial Number
+          const serialInArabic = toArabicNumber(serial);
+          const serialPath = await saveArabicTextAsImage(`رقم التسلسل: ${serialInArabic}`, "serial.png");
+          const serialImage = await new Promise((resolve, reject) => {
+            escpos.Image.load(serialPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
+          });
+          await printer.image(serialImage, "d24");
 
           // Customer Info
           const customerNamePath = await saveArabicTextAsImage(`اسم العميل: ${customerName}`, "customer_name.png");
@@ -295,6 +357,7 @@ app.post("/print", async (req, res) => {
     res.status(500).send(`فشل في الطباعة: ${error.message}`);
   }
 });
+
 
 // HTTPS Server
 const sslOptions = {
