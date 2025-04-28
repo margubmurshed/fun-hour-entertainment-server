@@ -120,26 +120,25 @@ app.get("/", (req, res) => {
 
 
 async function generateArabicTextImage(text, fontSize = 28) {
-  const canvas = createCanvas(384, fontSize + 20); // height adjusted automatically
+  const canvas = createCanvas(384, fontSize + 20); // Adjusted height
   const ctx = canvas.getContext('2d');
 
   ctx.fillStyle = "black";
   ctx.font = `${fontSize}px "Arial"`;
   ctx.textAlign = "center";
-  ctx.direction = "rtl";
+  ctx.direction = "rtl"; // Important for Arabic
   ctx.fillText(text, 192, fontSize);
 
-  const tempPath = path.join(os.tmpdir(), `${Date.now()}_arabic_text.png`);
   const buffer = canvas.toBuffer('image/png');
-  fs.writeFileSync(tempPath, buffer);
 
   return new Promise((resolve, reject) => {
-    escpos.Image.load(tempPath, (image) => {
+    escpos.Image.load(buffer, (image) => { // load directly from buffer
       if (image) resolve(image);
-      else reject(new Error('Failed to load temp Arabic image'));
+      else reject(new Error('Failed to generate Arabic text image'));
     });
   });
 }
+
 
 
 
