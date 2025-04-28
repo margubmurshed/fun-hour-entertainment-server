@@ -65,20 +65,15 @@ async function run() {
     app.get("/receipts/cash-session/:cashId", async (req, res) => {
       try {
         const cashId = req.params.cashId;
+    
         const cash = await cashesCollection.findOne({ _id: new ObjectId(cashId) });
     
         if (!cash) {
           return res.status(404).send({ message: "Cash session not found." });
         }
     
-        const openTime = new Date(cash.openingCashTime); // openingCashTime is a timestamp
-        const closeTime = cash.closingCashTime ? new Date(cash.closingCashTime) : new Date();
-    
         const receipts = await receiptsCollection.find({
-          createdAt: {
-            $gte: openTime.getTime(), // convert to timestamp number
-            $lte: closeTime.getTime()
-          }
+          cashId: cashId  // find receipts by cashId
         }).toArray();
     
         res.send(receipts);
@@ -87,6 +82,7 @@ async function run() {
         res.status(500).send({ message: "Internal server error." });
       }
     });
+    
     
     
     
@@ -138,6 +134,13 @@ async function run() {
         // Assign serial
         receiptData.serial = count + 1;
     
+        // 🛠 Ensure createdAt is number (timestamp in ms)
+        if (!receiptData.createdAt) {
+          receiptData.createdAt = Date.now(); // 👈 returns timestamp number
+        } else if (typeof receiptData.createdAt !== 'number') {
+          receiptData.createdAt = new Date(receiptData.createdAt).getTime();
+        }
+    
         // Insert receipt
         const result = await receiptsCollection.insertOne(receiptData);
     
@@ -147,6 +150,7 @@ async function run() {
         res.status(500).json({ message: "Failed to save receipt" });
       }
     });
+    
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. Successfully connected to MongoDB!");
