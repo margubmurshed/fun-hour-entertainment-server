@@ -180,11 +180,12 @@ const saveArabicTextAsImage = async (text, filename, fontSize = 28) => {
   return filePath;
 };
 
-// Helper to convert number to Arabic
 const toArabicNumber = (number) => {
+  if (number === undefined || number === null) return '';
   const arabicNumbers = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
   return number.toString().split('').map(digit => arabicNumbers[digit] || digit).join('');
 };
+
 
 // Ensure temp folder exists
 if (!fs.existsSync(path.join(__dirname, 'temp'))) {
