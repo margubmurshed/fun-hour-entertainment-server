@@ -186,7 +186,7 @@ app.post("/print", async (req, res) => {
 
           await printer.image(companyNameImage, "d24");
 
-          await printer.text("الرقم الضريبي: 6312592186100003");
+          await printer.text("VAT : 6312592186100003");
           await printer.text("--------------------------------");
 
           // Customer Info
