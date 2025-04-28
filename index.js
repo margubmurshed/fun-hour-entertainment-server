@@ -2,6 +2,7 @@ const express = require("express");
 const https = require('https');
 const fs = require('fs');
 const cors = require("cors");
+const { createCanvas, loadImage } = require('canvas');
 const escpos = require("escpos");
 escpos.Network = require('escpos-network');
 const path = require('path');
@@ -116,7 +117,20 @@ app.get("/", (req, res) => {
   res.send("Server is running");
 });
 
-// Print route
+
+// Function to generate Arabic text image
+async function generateArabicTextImage(text, fontSize = 24) {
+  const canvas = createCanvas(384, 50); // Width matches printer
+  const ctx = canvas.getContext('2d');
+
+  ctx.font = `${fontSize}px "Arial"`;
+  ctx.textAlign = "center";
+  ctx.direction = "rtl"; // Important for Arabic
+  ctx.fillText(text, 192, 30); // Center
+
+  return await loadImage(canvas.toDataURL());
+}
+
 app.post('/print', async (req, res) => {
   try {
     const {
@@ -143,6 +157,9 @@ app.post('/print', async (req, res) => {
       });
     });
 
+    const customerNameImage = await generateArabicTextImage(`العميل: ${customerName}`);
+    const mobileNumberImage = await generateArabicTextImage(`الجوال: ${mobileNumber}`);
+
     await new Promise((resolve, reject) => {
       device.open(async (error) => {
         if (error) return reject(error);
@@ -150,17 +167,17 @@ app.post('/print', async (req, res) => {
         try {
           await printer
             .align('ct')
-            .image(logo, 's8')
-            .then(() => {
-              printer
-                .size(0, 0)
+            .image(logo, 'd24') // smaller logo
+            .then(async () => {
+              await printer
+                .align('ct')
                 .text('ساعة فرح للترفيه')
                 .text('VAT: 6312592186100003')
                 .text('------------------------------')
+                .align('ct')
+                .image(customerNameImage, 'd24')
+                .image(mobileNumberImage, 'd24')
                 .align('lt')
-                .text(`Customer: ${customerName}`)
-                .text(`Mobile: ${mobileNumber}`)
-                .text(' ')
                 .text('Services:')
                 .tableCustom(services.map(service => ({
                   text: `${service.name} - ${service.price} SAR`,
