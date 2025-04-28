@@ -1,7 +1,7 @@
 const express = require("express");
 const https = require('https');
 const fs = require('fs');
-const fsp = require('fs/promises'); // Added for async file handling
+const fsp = require('fs/promises');
 const cors = require("cors");
 const sharp = require('sharp');
 const { createCanvas } = require('canvas');
@@ -14,15 +14,12 @@ require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 5000;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 app.use('/assets', express.static('assets'));
 
-// MongoDB URI
 const uri = `mongodb+srv://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@cluster0.hrq6pyr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
-// MongoDB Client
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -31,7 +28,6 @@ const client = new MongoClient(uri, {
   }
 });
 
-// MongoDB connection and routes
 async function run() {
   try {
     await client.connect();
@@ -40,13 +36,11 @@ async function run() {
     const cashesCollection = fheDB.collection("cashes");
     const productsCollection = fheDB.collection("products");
 
-    // Receipts
     app.get("/receipts", async (req, res) => {
       const result = await receiptsCollection.find().toArray();
       res.send(result);
     });
 
-    // Cashes
     app.get("/cashes", async (req, res) => {
       const result = await cashesCollection.find().toArray();
       res.send(result);
@@ -61,7 +55,6 @@ async function run() {
       res.send(result);
     });
 
-    // Products
     app.get("/products", async (req, res) => {
       const result = await productsCollection.find().toArray();
       res.send(result);
@@ -86,7 +79,6 @@ async function run() {
       res.send(result);
     });
 
-    // Post cash
     app.post("/cashes", async (req, res) => {
       const data = req.body;
       const result = await cashesCollection.insertOne(data);
@@ -100,7 +92,6 @@ async function run() {
       res.send(result);
     });
 
-    // Post receipt
     app.post("/receipts", async (req, res) => {
       const receipt = req.body;
       const result = await receiptsCollection.insertOne(receipt);
@@ -115,20 +106,18 @@ async function run() {
 }
 run();
 
-// Root route
 app.get("/", (req, res) => {
   res.send("Server is running");
 });
 
-
-// Utility function to save buffer as a temporary file
+// Save buffer as image
 async function saveBufferAsTempImage(buffer, filename = 'temp_image.png') {
   const tempPath = path.join(__dirname, filename);
   await fsp.writeFile(tempPath, buffer);
   return tempPath;
 }
 
-// Utility function to generate Arabic text image and save as temp
+// Generate Arabic text image
 async function generateArabicTextImage(text, fontSize = 28) {
   const canvas = createCanvas(384, fontSize + 20);
   const ctx = canvas.getContext('2d');
@@ -136,16 +125,27 @@ async function generateArabicTextImage(text, fontSize = 28) {
   ctx.fillStyle = "black";
   ctx.font = `${fontSize}px "Arial"`;
   ctx.textAlign = "center";
-  ctx.direction = "rtl"; // for Arabic
+  ctx.direction = "rtl";
   ctx.fillText(text, 192, fontSize);
 
   const buffer = canvas.toBuffer('image/png');
-  const tempPath = path.join(__dirname, 'temp_arabic_text.png');
+  const tempPath = path.join(__dirname, `temp_${Date.now()}.png`);
   await fsp.writeFile(tempPath, buffer);
   return tempPath;
 }
 
-// Updated /print endpoint
+// Arabic Numbers
+function toArabicNumber(n) {
+  const arabicNumbers = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+  return n.toString().split('').map(d => arabicNumbers[+d] || d).join('');
+}
+
+// Arabic date formatter
+function formatArabicDate(dateObj) {
+  return `${toArabicNumber(dateObj.getFullYear())}/${toArabicNumber(dateObj.getMonth() + 1)}/${toArabicNumber(dateObj.getDate())} - ${toArabicNumber(dateObj.getHours())}:${toArabicNumber(dateObj.getMinutes())}`;
+}
+
+// Main Print Endpoint
 app.post('/print', async (req, res) => {
   try {
     const {
@@ -162,38 +162,30 @@ app.post('/print', async (req, res) => {
     const device = new escpos.Network('192.168.8.37');
     const printer = new escpos.Printer(device);
 
-    const createdAtFormatted = new Date(createdAt).toLocaleString();
+    const createdAtFormatted = formatArabicDate(new Date(createdAt));
     const logoPath = path.join(__dirname, 'assets', 'logo.png');
 
-    // Resize logo with Sharp
     const resizedLogoBuffer = await sharp(logoPath)
       .resize(200, 100)
       .png()
       .toBuffer();
-
-    // Save resized logo temporarily
     const resizedLogoPath = await saveBufferAsTempImage(resizedLogoBuffer, 'temp_logo.png');
 
-    // Load resized logo
     const logo = await new Promise((resolve, reject) => {
       escpos.Image.load(resizedLogoPath, (image) => {
         if (image) resolve(image);
-        else reject(new Error('Failed to load resized logo'));
+        else reject(new Error('Failed to load logo'));
       });
     });
 
-    // Generate and save Arabic text image
-    const companyNameImagePath = await generateArabicTextImage("ساعة فرح للترفيه", 28);
-
-    // Load Arabic text image
+    const companyNameImagePath = await generateArabicTextImage("ساعة فرح للترفيه");
     const companyNameImage = await new Promise((resolve, reject) => {
       escpos.Image.load(companyNameImagePath, (image) => {
         if (image) resolve(image);
-        else reject(new Error('Failed to load Arabic text image'));
+        else reject(new Error('Failed to load company name image'));
       });
     });
 
-    // Printing flow
     await new Promise((resolve, reject) => {
       device.open(async (error) => {
         if (error) return reject(error);
@@ -201,43 +193,64 @@ app.post('/print', async (req, res) => {
         try {
           await printer.align('ct');
           await printer.image(logo, 'd24');
-
-          await printer.align('ct');
           await printer.image(companyNameImage, 'd24');
-
-          await printer.align('ct');
-          await printer.text('VAT: 6312592186100003');
           await printer.text('------------------------------');
 
-          await printer.align('lt');
-          await printer.text(`Customer: ${customerName}`);
-          await printer.text(`Mobile: ${mobileNumber}`);
+          const vatTextPath = await generateArabicTextImage('الرقم الضريبي: 6312592186100003');
+          const vatText = await escpos.Image.load(vatTextPath);
+          await printer.image(vatText, 'd24');
+
+          await printer.text('------------------------------');
+
+          const customerTextPath = await generateArabicTextImage(`اسم العميل: ${customerName}`);
+          const mobileTextPath = await generateArabicTextImage(`رقم الجوال: ${mobileNumber}`);
+          await printer.image(await escpos.Image.load(customerTextPath));
+          await printer.image(await escpos.Image.load(mobileTextPath));
           await printer.text('------------------------------');
 
           if (services.length > 0) {
-            await printer.text('Services:');
-            for (let service of services) {
-              await printer.text(`${service.name} - ${service.price} SAR`);
+            const servicesTitlePath = await generateArabicTextImage('الخدمات:');
+            await printer.image(await escpos.Image.load(servicesTitlePath));
+
+            for (let i = 0; i < services.length; i++) {
+              const service = services[i];
+              const text = `${toArabicNumber(i + 1)}. ${service.name} - ${toArabicNumber(service.price)} ر.س`;
+              const textPath = await generateArabicTextImage(text);
+              await printer.image(await escpos.Image.load(textPath));
             }
             await printer.text('------------------------------');
           }
 
           if (products.length > 0) {
-            await printer.text('Products:');
-            for (let product of products) {
-              await printer.text(`${product.name} x${product.quantity} - ${(product.price * product.quantity).toFixed(2)} SAR`);
+            const productsTitlePath = await generateArabicTextImage('المنتجات:');
+            await printer.image(await escpos.Image.load(productsTitlePath));
+
+            for (let i = 0; i < products.length; i++) {
+              const product = products[i];
+              const text = `${toArabicNumber(i + 1)}. ${product.name} ×${toArabicNumber(product.quantity)} - ${toArabicNumber((product.price * product.quantity).toFixed(2))} ر.س`;
+              const textPath = await generateArabicTextImage(text);
+              await printer.image(await escpos.Image.load(textPath));
             }
             await printer.text('------------------------------');
           }
 
-          await printer.text(`VAT: ${vat.toFixed(2)} SAR`);
-          await printer.text(`Total: ${total.toFixed(2)} SAR`);
-          await printer.text(`Payment: ${paymentType}`);
-          await printer.text(`Printed: ${createdAtFormatted}`);
+          const vatAmountPath = await generateArabicTextImage(`ضريبة القيمة المضافة: ${toArabicNumber(vat.toFixed(2))} ر.س`);
+          const totalAmountPath = await generateArabicTextImage(`الإجمالي: ${toArabicNumber(total.toFixed(2))} ر.س`);
+          const paymentTypePath = await generateArabicTextImage(`طريقة الدفع: ${paymentType}`);
+          const printedAtPath = await generateArabicTextImage(`تاريخ الطباعة: ${createdAtFormatted}`);
+          const vatNotePath = await generateArabicTextImage('شامل ضريبة القيمة المضافة 15٪');
+
+          await printer.image(await escpos.Image.load(vatAmountPath));
+          await printer.image(await escpos.Image.load(totalAmountPath));
+          await printer.image(await escpos.Image.load(paymentTypePath));
+          await printer.image(await escpos.Image.load(printedAtPath));
+          await printer.image(await escpos.Image.load(vatNotePath));
+
           await printer.text('------------------------------');
 
-          await printer.align('ct');
-          await printer.text('Thank you for visiting!');
+          const thankYouPath = await generateArabicTextImage('شكراً لزيارتكم');
+          await printer.image(await escpos.Image.load(thankYouPath));
+
           await printer.cut();
           await printer.close();
 
@@ -256,7 +269,6 @@ app.post('/print', async (req, res) => {
   }
 });
 
-// HTTPS Server setup remains same
 const sslOptions = {
   key: fs.readFileSync('key.pem'),
   cert: fs.readFileSync('cert.pem'),
