@@ -1,8 +1,9 @@
 const express = require("express");
 const https = require('https');
 const fs = require('fs');
+const fsp = require('fs/promises'); // Added for async file handling
 const cors = require("cors");
-const sharp = require('sharp'); // <-- Import sharp at the top
+const sharp = require('sharp');
 const { createCanvas } = require('canvas');
 const escpos = require("escpos");
 escpos.Network = require('escpos-network');
@@ -120,32 +121,31 @@ app.get("/", (req, res) => {
 });
 
 
+// Utility function to save buffer as a temporary file
+async function saveBufferAsTempImage(buffer, filename = 'temp_image.png') {
+  const tempPath = path.join(__dirname, filename);
+  await fsp.writeFile(tempPath, buffer);
+  return tempPath;
+}
+
+// Utility function to generate Arabic text image and save as temp
 async function generateArabicTextImage(text, fontSize = 28) {
-  const canvas = createCanvas(384, fontSize + 20); // Adjusted height
+  const canvas = createCanvas(384, fontSize + 20);
   const ctx = canvas.getContext('2d');
 
   ctx.fillStyle = "black";
   ctx.font = `${fontSize}px "Arial"`;
   ctx.textAlign = "center";
-  ctx.direction = "rtl"; // Important for Arabic
+  ctx.direction = "rtl"; // for Arabic
   ctx.fillText(text, 192, fontSize);
 
   const buffer = canvas.toBuffer('image/png');
-
-  return new Promise((resolve, reject) => {
-    escpos.Image.load(buffer, (image) => { // load directly from buffer
-      if (image) resolve(image);
-      else reject(new Error('Failed to generate Arabic text image'));
-    });
-  });
+  const tempPath = path.join(__dirname, 'temp_arabic_text.png');
+  await fsp.writeFile(tempPath, buffer);
+  return tempPath;
 }
 
-
-
-
-
-
-// Update your /print endpoint
+// Updated /print endpoint
 app.post('/print', async (req, res) => {
   try {
     const {
@@ -165,24 +165,35 @@ app.post('/print', async (req, res) => {
     const createdAtFormatted = new Date(createdAt).toLocaleString();
     const logoPath = path.join(__dirname, 'assets', 'logo.png');
 
-    // Step 1: Resize logo with Sharp
+    // Resize logo with Sharp
     const resizedLogoBuffer = await sharp(logoPath)
-      .resize(200, 100) // width, height you want
+      .resize(200, 100)
       .png()
       .toBuffer();
 
-    // Step 2: Load resized logo into escpos.Image
+    // Save resized logo temporarily
+    const resizedLogoPath = await saveBufferAsTempImage(resizedLogoBuffer, 'temp_logo.png');
+
+    // Load resized logo
     const logo = await new Promise((resolve, reject) => {
-      escpos.Image.load(resizedLogoBuffer, (image) => { // pass buffer here
+      escpos.Image.load(resizedLogoPath, (image) => {
         if (image) resolve(image);
-        else reject(new Error('Failed to load resized logo image'));
+        else reject(new Error('Failed to load resized logo'));
       });
     });
 
-    // Step 3: Render Arabic company name to an image
-    const companyNameImage = await generateArabicTextImage("ساعة فرح للترفيه", 28);
+    // Generate and save Arabic text image
+    const companyNameImagePath = await generateArabicTextImage("ساعة فرح للترفيه", 28);
 
-    // Step 4: Print
+    // Load Arabic text image
+    const companyNameImage = await new Promise((resolve, reject) => {
+      escpos.Image.load(companyNameImagePath, (image) => {
+        if (image) resolve(image);
+        else reject(new Error('Failed to load Arabic text image'));
+      });
+    });
+
+    // Printing flow
     await new Promise((resolve, reject) => {
       device.open(async (error) => {
         if (error) return reject(error);
@@ -245,10 +256,7 @@ app.post('/print', async (req, res) => {
   }
 });
 
-
-
-
-// HTTPS Server
+// HTTPS Server setup remains same
 const sslOptions = {
   key: fs.readFileSync('key.pem'),
   cert: fs.readFileSync('cert.pem'),
