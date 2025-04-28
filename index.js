@@ -161,6 +161,7 @@ app.post('/print', async (req, res) => {
     const createdAtFormatted = new Date(createdAt).toLocaleString();
     const logoPath = path.join(__dirname, 'assets', 'logo.png');
 
+    // Load images
     const logo = await new Promise((resolve, reject) => {
       escpos.Image.load(logoPath, (image) => {
         if (image) resolve(image);
@@ -176,47 +177,51 @@ app.post('/print', async (req, res) => {
         if (error) return reject(error);
 
         try {
-          await printer
-            .align('ct')
-            .image(logo, 'd24') // smaller logo
-            .then(async () => {
-              await printer
-                .align('ct')
-                .text('ساعة فرح للترفيه')
-                .text('VAT: 6312592186100003')
-                .text('------------------------------')
-                .align('ct')
-                .image(customerNameImage, 'd24')
-                .image(mobileNumberImage, 'd24')
-                .align('lt')
-                .text('Services:')
-                .tableCustom(services.map(service => ({
-                  text: `${service.name} - ${service.price} SAR`,
-                  align: "LEFT",
-                  width: 1,
-                  style: 'NORMAL'
-                })))
-                .text(' ')
-                .text('Products:')
-                .tableCustom(products.map(product => ({
-                  text: `${product.name} x ${product.quantity} - ${(product.price * product.quantity).toFixed(2)} SAR`,
-                  align: "LEFT",
-                  width: 1,
-                  style: 'NORMAL'
-                })))
-                .text(' ')
-                .text(`VAT: ${vat.toFixed(2)} SAR`)
-                .text(`Total: ${total.toFixed(2)} SAR`)
-                .text(`Payment Type: ${paymentType}`)
-                .text(' ')
-                .text(`Printed At: ${createdAtFormatted}`)
-                .align('ct')
-                .text('Thank you for visiting!')
-                .text('------------------------------')
-                .cut()
-                .close();
-              resolve();
-            });
+          await printer.align('ct');
+          await printer.image(logo, 'd24');
+
+          await printer.align('ct');
+          await printer.text('ساعة فرح للترفيه');
+          await printer.text('VAT: 6312592186100003');
+          await printer.text('------------------------------');
+
+          await printer.align('ct');
+          await printer.image(customerNameImage, 'd24');
+          await printer.image(mobileNumberImage, 'd24');
+
+          await printer.align('lt');
+          await printer.text('Services:');
+          await printer.tableCustom(services.map(service => ({
+            text: `${service.name} - ${service.price} SAR`,
+            align: "LEFT",
+            width: 1,
+            style: 'NORMAL'
+          })));
+
+          await printer.text(' ');
+          await printer.text('Products:');
+          await printer.tableCustom(products.map(product => ({
+            text: `${product.name} x ${product.quantity} - ${(product.price * product.quantity).toFixed(2)} SAR`,
+            align: "LEFT",
+            width: 1,
+            style: 'NORMAL'
+          })));
+
+          await printer.text(' ');
+          await printer.text(`VAT: ${vat.toFixed(2)} SAR`);
+          await printer.text(`Total: ${total.toFixed(2)} SAR`);
+          await printer.text(`Payment Type: ${paymentType}`);
+          await printer.text(' ');
+          await printer.text(`Printed At: ${createdAtFormatted}`);
+
+          await printer.align('ct');
+          await printer.text('Thank you for visiting!');
+          await printer.text('------------------------------');
+
+          await printer.cut();
+          await printer.close();
+
+          resolve();
         } catch (err) {
           reject(err);
         }
@@ -224,11 +229,13 @@ app.post('/print', async (req, res) => {
     });
 
     res.send({ message: 'Printing started.' });
+
   } catch (err) {
     console.error("Print Error:", err);
     res.status(500).send(`Failed to print receipt: ${err.message}`);
   }
 });
+
 
 
 // HTTPS Server
