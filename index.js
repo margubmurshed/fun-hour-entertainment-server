@@ -1,3 +1,5 @@
+// index.js
+
 const express = require("express");
 const https = require("https");
 const fs = require("fs");
@@ -118,7 +120,7 @@ async function generateArabicTextBuffer(text, fontSize = 28) {
   ctx.fillStyle = "black";
   ctx.font = `${fontSize}px "Arial"`;
   ctx.textAlign = "center";
-  ctx.direction = "rtl"; // Arabic Right-to-Left
+  ctx.direction = "rtl";
   ctx.fillText(text, 192, fontSize);
 
   return canvas.toBuffer("image/png");
@@ -143,12 +145,10 @@ app.post("/print", async (req, res) => {
 
     const createdAtFormatted = new Date(createdAt).toLocaleString("ar-EG");
 
-    // Load logo and resize
     const logoPath = path.join(__dirname, "assets", "logo.png");
-    const resizedLogoBuffer = await sharp(logoPath).resize(200, 100).png().toBuffer();
 
     const logoImage = await new Promise((resolve, reject) => {
-      escpos.Image.load(resizedLogoBuffer, (image) => {
+      escpos.Image.load(logoPath, (image) => {
         if (image) resolve(image);
         else reject(new Error("فشل تحميل الشعار"));
       });
@@ -162,7 +162,6 @@ app.post("/print", async (req, res) => {
           await printer.align("ct");
           await printer.image(logoImage, "d24");
 
-          // Company Name in Arabic
           const companyNameBuffer = await generateArabicTextBuffer("ساعة فرح للترفيه", 32);
           const companyNameImage = await new Promise((resolve, reject) => {
             escpos.Image.load(companyNameBuffer, (img) => {
@@ -178,7 +177,6 @@ app.post("/print", async (req, res) => {
           await printer.text("الرقم الضريبي: 6312592186100003");
           await printer.text("--------------------------------");
 
-          // Customer Info
           const customerBuffer = await generateArabicTextBuffer(`اسم العميل: ${customerName}`);
           const mobileBuffer = await generateArabicTextBuffer(`رقم الجوال: ${mobileNumber}`);
           const dateBuffer = await generateArabicTextBuffer(`التاريخ: ${createdAtFormatted}`);
@@ -214,7 +212,6 @@ app.post("/print", async (req, res) => {
             await printer.text("--------------------------------");
           }
 
-          // Total and Payment
           const vatBuffer = await generateArabicTextBuffer(`ضريبة القيمة المضافة: ${vat.toFixed(2)} ريال`);
           const totalBuffer = await generateArabicTextBuffer(`الإجمالي: ${total.toFixed(2)} ريال`);
           const paymentBuffer = await generateArabicTextBuffer(`طريقة الدفع: ${paymentType}`);
@@ -227,7 +224,6 @@ app.post("/print", async (req, res) => {
 
           await printer.text("--------------------------------");
 
-          // Footer
           const thankYouBuffer = await generateArabicTextBuffer("شكراً لزيارتكم!");
           await printer.image(thankYouBuffer, "d24");
 
@@ -256,5 +252,5 @@ const sslOptions = {
 };
 
 https.createServer(sslOptions, app).listen(port, "0.0.0.0", () => {
-  console.log("🚀 خادم ساعة فرح يعمل على HTTPS");
+  console.log("\ud83d\ude80 \u062e\u0627\u062f\u0645 \u0633\u0627\u0639\u0629 \u0641\u0631\u062d \u064a\u0639\u0645\u0644 \u0639\u0644\u0649 HTTPS");
 });
