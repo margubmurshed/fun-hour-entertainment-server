@@ -120,62 +120,66 @@ app.get("/", (req, res) => {
     res.send("Server is running")
 })
 
-// Print Route
 app.post('/print', async (req, res) => {
   try {
     console.log("Received print request:", req.body);
-      const { customerName, mobileNumber, services, products, total, vat, paymentType } = req.body;
+    const { customerName, mobileNumber, services, products, total, vat, paymentType, createdAt } = req.body;
 
-      // Create printer device
-      const device = new escpos.Network('192.168.8.37'); // <-- Your printer IP address
-      const printer = new escpos.Printer(device);
+    const device = new escpos.Network('192.168.8.37'); // Your printer IP
+    const printer = new escpos.Printer(device);
 
-      device.open(function () {
-          printer
-              .align('ct')
-              .style('b')
-              .size(1, 1)
-              .text('Fun Hour Entertainment')
-              .text('------------------------------')
-              .align('lt')
-              .text(`Customer: ${customerName}`)
-              .text(`Mobile: ${mobileNumber}`)
-              .text(' ')
-              .text('Services:')
-              .tableCustom(
-                  services.map(service => ({
-                      text: `${service.name} - ${service.price} SAR`,
-                      align: "LEFT",
-                      width: 1
-                  }))
-              )
-              .text(' ')
-              .text('Products:')
-              .tableCustom(
-                  products.map(product => ({
-                      text: `${product.name} - ${product.price} SAR`,
-                      align: "LEFT",
-                      width: 1
-                  }))
-              )
-              .text(' ')
-              .text(`VAT: ${vat.toFixed(2)} SAR`)
-              .text(`Total: ${total.toFixed(2)} SAR`)
-              .text(`Payment Type: ${paymentType}`)
-              .text(' ')
-              .align('ct')
-              .text('Thank you for visiting!')
-              .text('------------------------------')
-              .cut()
-              .close();
-      });
+    device.open(function () {
+      const createdAtFormatted = new Date(createdAt).toLocaleString(); // Format nicely
 
-      res.send({ message: 'Printing...' });
+      printer
+        .align('ct')
+        .style('b')
+        .size(0, 0) // small font
+        .text('    Fun Hour Entertainment    ')
+        .text('------------------------------')
+        .align('lt')
+        .text(` Customer: ${customerName}`)
+        .text(` Mobile: ${mobileNumber}`)
+        .text(' ')
+        .text(' Services:')
+        .tableCustom(
+          services.map(service => ({
+            text: `${service.name} - ${service.price} SAR`,
+            align: "LEFT",
+            width: 1,
+            style: 'NORMAL'
+          }))
+        )
+        .text(' ')
+        .text(' Products:')
+        .tableCustom(
+          products.map(product => ({
+            text: `${product.name} x ${product.quantity} - ${(product.price * product.quantity).toFixed(2)} SAR`,
+            align: "LEFT",
+            width: 1,
+            style: 'NORMAL'
+          }))
+        )
+        .text(' ')
+        .text(` VAT: ${vat.toFixed(2)} SAR`)
+        .text(` Total: ${total.toFixed(2)} SAR`)
+        .text(` Payment Type: ${paymentType}`)
+        .text(' ')
+        .text(` Printed At: ${createdAtFormatted}`)
+        .align('ct')
+        .text('Thank you for visiting!')
+        .text('------------------------------')
+        .cut()
+        .close();
+    });
+
+    res.send({ message: 'Printing...' });
   } catch (err) {
-      console.error(err);
-      res.status(500).send(`Failed to print receipt : ${err.message}`);
+    console.error(err);
+    res.status(500).send(`Failed to print receipt: ${err.message}`);
   }
 });
+
 
 // Read SSL certs
 const sslOptions = {
@@ -185,5 +189,5 @@ const sslOptions = {
 
 https.createServer(sslOptions, app).listen(port, '0.0.0.0', () => {
   console.log("Fun Hour Entertainment HTTPS Server is running 🚀");
-  console.log(`Access it at: https://192.168.8.10:${port}/`);
+  console.log(`Access it at: https://192.168.0.102:${port}/`);
 });
