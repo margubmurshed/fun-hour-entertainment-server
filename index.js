@@ -3,23 +3,23 @@ const https = require('https');
 const fs = require('fs');
 const cors = require("cors");
 const escpos = require("escpos");
+const sharp = require("sharp"); // Added
 escpos.Network = require('escpos-network');
 const path = require('path');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 5000;
-require('dotenv').config();
 
-
+// Middleware
 app.use(cors());
-app.use(express.json())
+app.use(express.json());
 
-console.log(process.env.DB_USERNAME)
-
+// MongoDB URI
 const uri = `mongodb+srv://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@cluster0.hrq6pyr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+// MongoDB Client
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -28,99 +28,96 @@ const client = new MongoClient(uri, {
   }
 });
 
+// MongoDB connection and routes
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
-
-
     const fheDB = client.db("fheDB");
     const receiptsCollection = fheDB.collection("receipts");
     const cashesCollection = fheDB.collection("cashes");
     const productsCollection = fheDB.collection("products");
 
+    // Receipts
     app.get("/receipts", async (req, res) => {
-      const cursor = receiptsCollection.find();
-      const result = await cursor.toArray();
-      res.send(result)
-    })
+      const result = await receiptsCollection.find().toArray();
+      res.send(result);
+    });
 
+    // Cashes
     app.get("/cashes", async (req, res) => {
-      const cursor = cashesCollection.find();
-      const result = await cursor.toArray();
-      res.send(result)
-    })
+      const result = await cashesCollection.find().toArray();
+      res.send(result);
+    });
 
     app.get("/cashes/:email", async (req, res) => {
       const email = req.params.email;
-
       const result = await cashesCollection.findOne({
         cashierEmail: email,
         closingCashAmount: null,
       });
-
       res.send(result);
     });
 
+    // Products
     app.get("/products", async (req, res) => {
-      const cursor = productsCollection.find();
-      const result = await cursor.toArray();
-      res.send(result)
-    })
+      const result = await productsCollection.find().toArray();
+      res.send(result);
+    });
 
-    app.post("/cashes", async (req, res) => {
-      console.log(req.body, "post cashes")
-      const data = req.body;
-      const result = await cashesCollection.insertOne(data);
-      res.send(result)
-    })
-
-    app.post("/receipts", async (req, res) => {
-      const receipt = req.body;
-      const result = await receiptsCollection.insertOne(receipt);
-      res.send(result)
-    })
     app.post("/products", async (req, res) => {
       const product = req.body;
       const result = await productsCollection.insertOne(product);
-      res.send(result)
-    })
+      res.send(result);
+    });
 
     app.put("/products/:id", async (req, res) => {
       const id = req.params.id;
       const body = req.body;
       const result = await productsCollection.updateOne({ _id: new ObjectId(id) }, { $set: body });
       res.send(result);
-    })
+    });
 
+    app.delete("/products/:id", async (req, res) => {
+      const id = req.params.id;
+      const result = await productsCollection.deleteOne({ _id: new ObjectId(id) });
+      res.send(result);
+    });
+
+    // Post cash
+    app.post("/cashes", async (req, res) => {
+      const data = req.body;
+      const result = await cashesCollection.insertOne(data);
+      res.send(result);
+    });
 
     app.patch("/cashes/:id", async (req, res) => {
       const id = req.params.id;
       const body = req.body;
       const result = await cashesCollection.updateOne({ _id: new ObjectId(id) }, { $set: body });
       res.send(result);
-    })
+    });
 
-    app.delete("/products/:id", async (req, res) => {
-      const id = req.params.id;
-      const result = await productsCollection.deleteOne({ _id: new ObjectId(id) });
+    // Post receipt
+    app.post("/receipts", async (req, res) => {
+      const receipt = req.body;
+      const result = await receiptsCollection.insertOne(receipt);
       res.send(result);
-    })
+    });
 
-    // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    console.log("Pinged your deployment. Successfully connected to MongoDB!");
   } catch (e) {
-    console.log(e.message)
+    console.error("MongoDB Error:", e.message);
   }
 }
 run();
 
-
+// Root route
 app.get("/", (req, res) => {
-  res.send("Server is running")
-})
+  res.send("Server is running");
+});
 
+// Print route
 app.post('/print', async (req, res) => {
   try {
     const {
@@ -139,128 +136,77 @@ app.post('/print', async (req, res) => {
 
     const createdAtFormatted = new Date(createdAt).toLocaleString();
     const logoPath = path.join(__dirname, 'assets', 'logo.png');
-    const image = await escpos.Image.load(logoPath);
 
-    device.open(() => {
-      printer
-        .align('ct')
-        .image(image, 's8')
-        .then(() => {
-          printer
-            .size(0, 0) // 👈 Smallest font size
-            .text('ساعة فرح للترفيه')
-            .text('VAT: 6312592186100003')
-            .text('------------------------------')
-            .align('lt')
-            .text(`Customer: ${customerName}`)
-            .text(`Mobile: ${mobileNumber}`)
-            .text(' ')
-            .text('Services:')
-            .tableCustom(services.map(service => ({
-              text: `${service.name} - ${service.price} SAR`,
-              align: "LEFT",
-              width: 1,
-              style: 'NORMAL'
-            })))
-            .text(' ')
-            .text('Products:')
-            .tableCustom(products.map(product => ({
-              text: `${product.name} x ${product.quantity} - ${(product.price * product.quantity).toFixed(2)} SAR`,
-              align: "LEFT",
-              width: 1,
-              style: 'NORMAL'
-            })))
-            .text(' ')
-            .text(`VAT: ${vat.toFixed(2)} SAR`)
-            .text(`Total: ${total.toFixed(2)} SAR`)
-            .text(`Payment Type: ${paymentType}`)
-            .text(' ')
-            .text(`Printed At: ${createdAtFormatted}`)
-            .align('ct')
-            .text('Thank you for visiting!')
-            .text('------------------------------')
-            .cut()
-            .close();
-        });
+    const logoBuffer = await sharp(logoPath)
+      .resize(300) // Adjust size if needed
+      .toBuffer();
+
+    const image = await new Promise((resolve, reject) => {
+      escpos.Image.load(logoBuffer, (loadedImage) => {
+        if (loadedImage) resolve(loadedImage);
+        else reject(new Error('Failed to load logo image.'));
+      });
     });
 
-    res.send({ message: 'Printing...' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).send(`Failed to print receipt: ${err.message}`);
-  }
-});
-app.post('/print', async (req, res) => {
-  try {
-    const {
-      customerName,
-      mobileNumber,
-      services = [],
-      products = [],
-      total,
-      vat,
-      paymentType,
-      createdAt
-    } = req.body;
-
-    const device = new escpos.Network('192.168.8.37');
-    const printer = new escpos.Printer(device);
-
-    const createdAtFormatted = new Date(createdAt).toLocaleString();
-    const logoPath = path.join(__dirname, 'assets', 'logo.png');
-    const image = await escpos.Image.load(logoPath);
-
-    device.open(() => {
-      printer
-        .align('ct')
-        .image(image, 's8')
-        .then(() => {
-          printer
-            .text('ساعة فرح للترفيه')
-            .text('VAT: 6312592186100003')
-            .text('------------------------------')
-            .align('lt')
-            .text(`Customer: ${customerName}`)
-            .text(`Mobile: ${mobileNumber}`)
-            .text(' ')
-            .text('Services:')
-            .tableCustom(services.map(service => ({
-              text: `${service.name} - ${service.price} SAR`,
-              align: "LEFT",
-              width: 1,
-              style: 'NORMAL'
-            })))
-            .text(' ')
-            .text('Products:')
-            .tableCustom(products.map(product => ({
-              text: `${product.name} x ${product.quantity} - ${(product.price * product.quantity).toFixed(2)} SAR`,
-              align: "LEFT",
-              width: 1,
-              style: 'NORMAL'
-            })))
-            .text(' ')
-            .text(`VAT: ${vat.toFixed(2)} SAR`)
-            .text(`Total: ${total.toFixed(2)} SAR`)
-            .text(`Payment Type: ${paymentType}`)
-            .text(' ')
-            .text(`Printed At: ${createdAtFormatted}`)
+    await new Promise((resolve, reject) => {
+      device.open(async (error) => {
+        if (error) return reject(error);
+        try {
+          await printer
             .align('ct')
-            .text('Thank you for visiting!')
-            .text('------------------------------')
-            .cut()
-            .close();
-        });
+            .image(image, 's8')
+            .then(() => {
+              printer
+                .size(0, 0)
+                .text('ساعة فرح للترفيه')
+                .text('VAT: 6312592186100003')
+                .text('------------------------------')
+                .align('lt')
+                .text(`Customer: ${customerName}`)
+                .text(`Mobile: ${mobileNumber}`)
+                .text(' ')
+                .text('Services:')
+                .tableCustom(services.map(service => ({
+                  text: `${service.name} - ${service.price} SAR`,
+                  align: "LEFT",
+                  width: 1,
+                  style: 'NORMAL'
+                })))
+                .text(' ')
+                .text('Products:')
+                .tableCustom(products.map(product => ({
+                  text: `${product.name} x ${product.quantity} - ${(product.price * product.quantity).toFixed(2)} SAR`,
+                  align: "LEFT",
+                  width: 1,
+                  style: 'NORMAL'
+                })))
+                .text(' ')
+                .text(`VAT: ${vat.toFixed(2)} SAR`)
+                .text(`Total: ${total.toFixed(2)} SAR`)
+                .text(`Payment Type: ${paymentType}`)
+                .text(' ')
+                .text(`Printed At: ${createdAtFormatted}`)
+                .align('ct')
+                .text('Thank you for visiting!')
+                .text('------------------------------')
+                .cut()
+                .close();
+              resolve();
+            });
+        } catch (err) {
+          reject(err);
+        }
+      });
     });
 
-    res.send({ message: 'Printing...' });
+    res.send({ message: 'Printing started.' });
   } catch (err) {
-    console.error(err);
+    console.error("Print Error:", err);
     res.status(500).send(`Failed to print receipt: ${err.message}`);
   }
 });
 
-
-// Read SSL certs
+// HTTPS Server
 const sslOptions = {
   key: fs.readFileSync('key.pem'),
   cert: fs.readFileSync('cert.pem'),
