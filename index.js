@@ -3,7 +3,6 @@ const https = require('https');
 const fs = require('fs');
 const cors = require("cors");
 const escpos = require("escpos");
-const sharp = require("sharp"); // Added
 escpos.Network = require('escpos-network');
 const path = require('path');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
