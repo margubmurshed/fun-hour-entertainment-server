@@ -119,27 +119,28 @@ app.get("/", (req, res) => {
 });
 
 
-async function generateArabicTextImage(text, fontSize = 24) {
-  const canvas = createCanvas(384, 50);
+async function generateArabicTextImage(text, fontSize = 28) {
+  const canvas = createCanvas(384, fontSize + 20); // height adjusted automatically
   const ctx = canvas.getContext('2d');
 
+  ctx.fillStyle = "black";
   ctx.font = `${fontSize}px "Arial"`;
   ctx.textAlign = "center";
-  ctx.direction = "rtl"; // for Arabic
-  ctx.fillText(text, 192, 30);
+  ctx.direction = "rtl";
+  ctx.fillText(text, 192, fontSize);
 
-  // Save buffer to temp file
   const tempPath = path.join(os.tmpdir(), `${Date.now()}_arabic_text.png`);
   const buffer = canvas.toBuffer('image/png');
   fs.writeFileSync(tempPath, buffer);
 
-  return await new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     escpos.Image.load(tempPath, (image) => {
       if (image) resolve(image);
       else reject(new Error('Failed to load temp Arabic image'));
     });
   });
 }
+
 
 
 app.post('/print', async (req, res) => {
@@ -161,16 +162,18 @@ app.post('/print', async (req, res) => {
     const createdAtFormatted = new Date(createdAt).toLocaleString();
     const logoPath = path.join(__dirname, 'assets', 'logo.png');
 
-    // Load images
+    // Load logo image
     const logo = await new Promise((resolve, reject) => {
       escpos.Image.load(logoPath, (image) => {
-        if (image) resolve(image);
-        else reject(new Error('Failed to load logo image'));
+        if (image) {
+          image.resize(200, 100); // Make logo small
+          resolve(image);
+        } else reject(new Error('Failed to load logo image'));
       });
     });
 
-    const customerNameImage = await generateArabicTextImage(`العميل: ${customerName}`);
-    const mobileNumberImage = await generateArabicTextImage(`الجوال: ${mobileNumber}`);
+    // Render Arabic company name to an image
+    const companyNameImage = await generateArabicTextImage("ساعة فرح للترفيه", 28);
 
     await new Promise((resolve, reject) => {
       device.open(async (error) => {
@@ -181,43 +184,41 @@ app.post('/print', async (req, res) => {
           await printer.image(logo, 'd24');
 
           await printer.align('ct');
-          await printer.text('ساعة فرح للترفيه');
+          await printer.image(companyNameImage, 'd24');
+
+          await printer.align('ct');
           await printer.text('VAT: 6312592186100003');
           await printer.text('------------------------------');
 
-          await printer.align('ct');
-          await printer.image(customerNameImage, 'd24');
-          await printer.image(mobileNumberImage, 'd24');
-
           await printer.align('lt');
-          await printer.text('Services:');
-          await printer.tableCustom(services.map(service => ({
-            text: `${service.name} - ${service.price} SAR`,
-            align: "LEFT",
-            width: 1,
-            style: 'NORMAL'
-          })));
+          await printer.text(`Customer: ${customerName}`);
+          await printer.text(`Mobile: ${mobileNumber}`);
+          await printer.text('------------------------------');
 
-          await printer.text(' ');
-          await printer.text('Products:');
-          await printer.tableCustom(products.map(product => ({
-            text: `${product.name} x ${product.quantity} - ${(product.price * product.quantity).toFixed(2)} SAR`,
-            align: "LEFT",
-            width: 1,
-            style: 'NORMAL'
-          })));
+          if (services.length > 0) {
+            await printer.text('Services:');
+            for (let service of services) {
+              await printer.text(`${service.name} - ${service.price} SAR`);
+            }
+            await printer.text('------------------------------');
+          }
 
-          await printer.text(' ');
+          if (products.length > 0) {
+            await printer.text('Products:');
+            for (let product of products) {
+              await printer.text(`${product.name} x${product.quantity} - ${(product.price * product.quantity).toFixed(2)} SAR`);
+            }
+            await printer.text('------------------------------');
+          }
+
           await printer.text(`VAT: ${vat.toFixed(2)} SAR`);
           await printer.text(`Total: ${total.toFixed(2)} SAR`);
-          await printer.text(`Payment Type: ${paymentType}`);
-          await printer.text(' ');
-          await printer.text(`Printed At: ${createdAtFormatted}`);
+          await printer.text(`Payment: ${paymentType}`);
+          await printer.text(`Printed: ${createdAtFormatted}`);
+          await printer.text('------------------------------');
 
           await printer.align('ct');
           await printer.text('Thank you for visiting!');
-          await printer.text('------------------------------');
-
           await printer.cut();
           await printer.close();
 
@@ -235,6 +236,7 @@ app.post('/print', async (req, res) => {
     res.status(500).send(`Failed to print receipt: ${err.message}`);
   }
 });
+
 
 
 
