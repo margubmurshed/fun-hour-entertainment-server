@@ -2,7 +2,8 @@ const express = require("express");
 const https = require('https');
 const fs = require('fs');
 const cors = require("cors");
-const { createCanvas, loadImage } = require('canvas');
+const os = require('os');
+const { createCanvas } = require('canvas');
 const escpos = require("escpos");
 escpos.Network = require('escpos-network');
 const path = require('path');
@@ -118,18 +119,28 @@ app.get("/", (req, res) => {
 });
 
 
-// Function to generate Arabic text image
 async function generateArabicTextImage(text, fontSize = 24) {
-  const canvas = createCanvas(384, 50); // Width matches printer
+  const canvas = createCanvas(384, 50);
   const ctx = canvas.getContext('2d');
 
   ctx.font = `${fontSize}px "Arial"`;
   ctx.textAlign = "center";
-  ctx.direction = "rtl"; // Important for Arabic
-  ctx.fillText(text, 192, 30); // Center
+  ctx.direction = "rtl"; // for Arabic
+  ctx.fillText(text, 192, 30);
 
-  return await loadImage(canvas.toDataURL());
+  // Save buffer to temp file
+  const tempPath = path.join(os.tmpdir(), `${Date.now()}_arabic_text.png`);
+  const buffer = canvas.toBuffer('image/png');
+  fs.writeFileSync(tempPath, buffer);
+
+  return await new Promise((resolve, reject) => {
+    escpos.Image.load(tempPath, (image) => {
+      if (image) resolve(image);
+      else reject(new Error('Failed to load temp Arabic image'));
+    });
+  });
 }
+
 
 app.post('/print', async (req, res) => {
   try {
