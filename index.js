@@ -4,6 +4,7 @@ const fs = require('fs');
 const cors = require("cors");
 const escpos = require("escpos");
 escpos.Network = require('escpos-network');
+const path = require('path');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 const app = express();
