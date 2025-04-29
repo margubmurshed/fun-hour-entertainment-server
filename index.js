@@ -65,27 +65,27 @@ async function run() {
     app.get("/receipts/cash-session/:cashId", async (req, res) => {
       try {
         const cashId = req.params.cashId;
-    
+
         const cash = await cashesCollection.findOne({ _id: new ObjectId(cashId) });
-    
+
         if (!cash) {
           return res.status(404).send({ message: "Cash session not found." });
         }
-    
+
         const receipts = await receiptsCollection.find({
           cashId: cashId  // find receipts by cashId
         }).toArray();
-    
+
         res.send(receipts);
       } catch (error) {
         console.error("Failed to fetch receipts for cash session:", error);
         res.status(500).send({ message: "Internal server error." });
       }
     });
-    
-    
-    
-    
+
+
+
+
 
     app.post("/products", async (req, res) => {
       const product = req.body;
@@ -123,27 +123,27 @@ async function run() {
       try {
         const receiptData = req.body;
         const { cashId } = receiptData;
-    
+
         if (!cashId) {
           return res.status(400).json({ message: "Missing cashId in receipt" });
         }
-    
+
         // How many receipts exist for this cash session?
         const count = await receiptsCollection.countDocuments({ cashId });
-    
+
         // Assign serial
         receiptData.serial = count + 1;
-    
+
         // 🛠 Ensure createdAt is number (timestamp in ms)
         if (!receiptData.createdAt) {
           receiptData.createdAt = Date.now(); // 👈 returns timestamp number
         } else if (typeof receiptData.createdAt !== 'number') {
           receiptData.createdAt = new Date(receiptData.createdAt).getTime();
         }
-    
+
         // Insert receipt
         const result = await receiptsCollection.insertOne(receiptData);
-    
+
         res.status(201).json({ insertedId: result.insertedId, serial: receiptData.serial });
       } catch (error) {
         console.error("Failed to save receipt:", error);
@@ -156,36 +156,36 @@ async function run() {
     const saveArabicTextAsImage = async (text, filename, fontSize = 28) => {
       const canvas = createCanvas(384, fontSize + 20);
       const ctx = canvas.getContext("2d");
-    
+
       ctx.fillStyle = "black";
       ctx.font = `${fontSize}px "Arial"`;
       ctx.textAlign = "center";
       ctx.direction = "rtl"; // Arabic right-to-left
       ctx.fillText(text, 192, fontSize);
-    
+
       const buffer = canvas.toBuffer("image/png");
       const filePath = path.join(__dirname, 'temp', filename);
       fs.writeFileSync(filePath, buffer);
       return filePath;
     };
-    
+
     const toArabicNumber = (number) => {
       if (number === undefined || number === null) return '';
-      const arabicNumbers = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+      const arabicNumbers = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
       return number.toString().split('').map(digit => arabicNumbers[digit] || digit).join('');
     };
-    
-    
+
+
     // Ensure temp folder exists
     if (!fs.existsSync(path.join(__dirname, 'temp'))) {
       fs.mkdirSync(path.join(__dirname, 'temp'));
     }
-    
+
     // /print endpoint
     app.post("/print", async (req, res) => {
-      const {receiptId} = req.body;
+      const { receiptId } = req.body;
       try {
-        const receipt = await receiptsCollection.findOne({_id: new ObjectId(receiptId)});
+        const receipt = await receiptsCollection.findOne({ _id: new ObjectId(receiptId) });
         const {
           customerName,
           mobileNumber,
@@ -197,35 +197,35 @@ async function run() {
           createdAt,
           serial
         } = receipt;
-        
-    
+
+
         const device = new escpos.Network("192.168.8.37");
         const printer = new escpos.Printer(device);
-    
+
         const createdAtFormatted = new Date(createdAt).toLocaleString("ar-EG");
-    
+
         const logoPath = path.join(__dirname, "assets", "logo.png");
-    
+
         await new Promise((resolve, reject) => {
           device.open(async (error) => {
             if (error) return reject(error);
-    
+
             try {
               await printer.align("ct");
-    
+
               // Resize logo and save temporarily
               const resizedLogoPath = path.join(__dirname, "temp", "logo_resized.png");
               await sharp(logoPath).resize(200, 100).toFile(resizedLogoPath);
-    
+
               const logoImage = await new Promise((resolve, reject) => {
                 escpos.Image.load(resizedLogoPath, (image) => {
                   if (image) resolve(image);
                   else reject(new Error("Failed to load logo image"));
                 });
               });
-    
+
               await printer.image(logoImage, "d24");
-    
+
               // Company Name
               const companyNamePath = await saveArabicTextAsImage("ساعة فرح للترفيه", "company_name.png", 32);
               const companyNameImage = await new Promise((resolve, reject) => {
@@ -234,12 +234,12 @@ async function run() {
                   else reject(new Error("Failed to load company name image"));
                 });
               });
-    
+
               await printer.image(companyNameImage, "d24");
-    
+
               await printer.text("VAT : 6312592186100003");
               await printer.text("--------------------------------");
-    
+
               // Serial Number
               const serialInArabic = toArabicNumber(serial);
               const serialPath = await saveArabicTextAsImage(`رقم التسلسل: ${serialInArabic}`, "serial.png");
@@ -247,12 +247,12 @@ async function run() {
                 escpos.Image.load(serialPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
               });
               await printer.image(serialImage, "d24");
-    
+
               // Customer Info
               const customerNamePath = await saveArabicTextAsImage(`اسم العميل: ${customerName}`, "customer_name.png");
               const mobileNumberPath = await saveArabicTextAsImage(`رقم الجوال: ${mobileNumber}`, "mobile_number.png");
               const createdAtPath = await saveArabicTextAsImage(`التاريخ: ${createdAtFormatted}`, "created_at.png");
-    
+
               const customerNameImage = await new Promise((resolve, reject) => {
                 escpos.Image.load(customerNamePath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
               });
@@ -262,21 +262,21 @@ async function run() {
               const createdAtImage = await new Promise((resolve, reject) => {
                 escpos.Image.load(createdAtPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
               });
-    
+
               await printer.image(customerNameImage, "d24");
               await printer.image(mobileNumberImage, "d24");
               await printer.image(createdAtImage, "d24");
               await printer.text("--------------------------------");
-    
+
               let counter = 1;
-    
+
               if (services.length > 0) {
                 const serviceHeaderPath = await saveArabicTextAsImage("الخدمات:", "services_header.png");
                 const serviceHeaderImage = await new Promise((resolve, reject) => {
                   escpos.Image.load(serviceHeaderPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
                 });
                 await printer.image(serviceHeaderImage, "d24");
-    
+
                 for (const service of services) {
                   const serviceLine = `${service.name} - ${service.price} ريال`;
                   const servicePath = await saveArabicTextAsImage(serviceLine, `service_${counter}.png`);
@@ -287,14 +287,14 @@ async function run() {
                 }
                 await printer.text("--------------------------------");
               }
-    
+
               if (products.length > 0) {
                 const productsHeaderPath = await saveArabicTextAsImage("المنتجات:", "products_header.png");
                 const productsHeaderImage = await new Promise((resolve, reject) => {
                   escpos.Image.load(productsHeaderPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
                 });
                 await printer.image(productsHeaderImage, "d24");
-    
+
                 for (const product of products) {
                   const productLine = `${product.name} ×${product.quantity} - ${(product.price * product.quantity).toFixed(2)} ريال`;
                   const productPath = await saveArabicTextAsImage(productLine, `product_${counter}.png`);
@@ -305,13 +305,13 @@ async function run() {
                 }
                 await printer.text("--------------------------------");
               }
-    
+
               // Total and Payment
               const vatPath = await saveArabicTextAsImage(`ضريبة القيمة المضافة: ${vat.toFixed(2)} ريال`, "vat.png");
               const totalPath = await saveArabicTextAsImage(`الإجمالي: ${total.toFixed(2)} ريال`, "total.png");
               const paymentPath = await saveArabicTextAsImage(`طريقة الدفع: ${paymentType}`, "payment.png");
               const vatIncludedPath = await saveArabicTextAsImage("15% ضريبة القيمة المضافة مشمولة في الإجمالي", "vat_included.png");
-    
+
               const vatImage = await new Promise((resolve, reject) => {
                 escpos.Image.load(vatPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
               });
@@ -324,30 +324,30 @@ async function run() {
               const vatIncludedImage = await new Promise((resolve, reject) => {
                 escpos.Image.load(vatIncludedPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
               });
-    
+
               await printer.image(vatImage, "d24");
               await printer.image(totalImage, "d24");
               await printer.image(paymentImage, "d24");
               await printer.image(vatIncludedImage, "d24");
-    
+
               await printer.text("--------------------------------");
-    
+
               const thankYouPath = await saveArabicTextAsImage("شكراً لزيارتكم!", "thank_you.png");
               const thankYouImage = await new Promise((resolve, reject) => {
                 escpos.Image.load(thankYouPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
               });
               await printer.image(thankYouImage, "d24");
-    
+
               await printer.cut();
               await printer.close();
-    
+
               resolve();
             } catch (e) {
               reject(e);
             }
           });
         });
-    
+
         res.send({ message: "تم بدء الطباعة." });
       } catch (error) {
         console.error("خطأ في الطباعة:", error);
@@ -363,21 +363,21 @@ async function run() {
       try {
         const cash = await cashesCollection.findOne({ _id: new ObjectId(cashId) });
         if (!cash) return res.status(404).send({ message: "Cash session not found" });
-    
+
         const {
           openingCashAmount,
           openingCashTime,
           closingCashAmount,
           closingCashTime
         } = cash;
-    
+
         const receipts = await receiptsCollection.find({ cashId }).toArray();
-    
+
         // Grouping logic as before...
         const productsMap = new Map();
         const servicesMap = new Map();
         let totalProducts = 0, totalServices = 0;
-    
+
         for (const receipt of receipts) {
           for (const p of receipt.products || []) {
             const existing = productsMap.get(p.name) || { quantity: 0, total: 0, price: p.price };
@@ -394,20 +394,47 @@ async function run() {
             totalServices += s.price;
           }
         }
-    
+
+        // sales summary
+        let totalProductSales = 0;
+        receipts.forEach(receipt => {
+          receipt.products.forEach(product => {
+            totalProductSales += product.price * product.quantity;
+          });
+        });
+
+        let totalServicesSales = 0;
+        receipts.forEach(receipt => {
+          receipt.services.forEach(service => {
+            totalServicesSales += service.price;
+          });
+        });
+
+        let totalCash = 0;
+        let totalCard = 0;
+
+        receipts.forEach(receipt => {
+          if (receipt.paymentType === 'cash') totalCash += receipt.total;
+          else if (receipt.paymentType === 'card') totalCard += receipt.total;
+        });
+
+        const cashDifference = closingCashAmount - totalCash;
+
+
+
         const device = new escpos.Network("192.168.8.37");
         const printer = new escpos.Printer(device);
-    
+
         const logoPath = path.join(__dirname, "assets", "logo.png");
         const printedAtFormatted = new Date().toLocaleString("ar-EG");
-    
+
         await new Promise((resolve, reject) => {
           device.open(async (error) => {
             if (error) return reject(error);
-    
+
             try {
               await printer.align("ct");
-    
+
               // Logo
               const resizedLogoPath = path.join(__dirname, "temp", "logo_resized.png");
               await sharp(logoPath).resize(200, 100).toFile(resizedLogoPath);
@@ -418,7 +445,7 @@ async function run() {
                 });
               });
               await printer.image(logoImage, "d24");
-    
+
               // Print Time
               const printedAtPath = await saveArabicTextAsImage(`وقت الطباعة: ${printedAtFormatted}`, "printed_at.png");
               const printedAtImage = await new Promise((resolve, reject) => {
@@ -426,7 +453,7 @@ async function run() {
               });
               await printer.image(printedAtImage, "d24");
               await printer.text("--------------------------------");
-    
+
               // Session Info Section (NEW)
               const lines = [
                 `اسم الكاشير: ${cashierName}`,
@@ -436,7 +463,7 @@ async function run() {
                 `نهاية الجلسة: ${new Date(closingCashTime).toLocaleString("ar-EG")}`,
                 `المبلغ الختامي: ${closingCashAmount} ريال`,
               ];
-    
+
               for (const [i, text] of lines.entries()) {
                 const imagePath = await saveArabicTextAsImage(text, `session_line_${i}.png`);
                 const img = await new Promise((resolve, reject) => {
@@ -444,9 +471,9 @@ async function run() {
                 });
                 await printer.image(img, "d24");
               }
-    
+
               await printer.text("--------------------------------");
-    
+
               // Products Section
               if (productsMap.size > 0) {
                 const headerPath = await saveArabicTextAsImage("المنتجات المباعة اليوم", "header_products.png", 30);
@@ -454,7 +481,7 @@ async function run() {
                   escpos.Image.load(headerPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
                 });
                 await printer.image(headerImage, "d24");
-    
+
                 for (const [name, data] of productsMap.entries()) {
                   const line = `${name} ×${data.quantity} - ${data.total.toFixed(2)} ريال`;
                   const pathP = await saveArabicTextAsImage(line, `product_line_${name}.png`);
@@ -463,10 +490,10 @@ async function run() {
                   });
                   await printer.image(img, "d24");
                 }
-    
+
                 await printer.text("--------------------------------");
               }
-    
+
               // Services Section
               if (servicesMap.size > 0) {
                 const headerPath = await saveArabicTextAsImage("الخدمات المباعة اليوم", "header_services.png", 30);
@@ -474,7 +501,7 @@ async function run() {
                   escpos.Image.load(headerPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
                 });
                 await printer.image(headerImage, "d24");
-    
+
                 for (const [name, data] of servicesMap.entries()) {
                   const line = `${name} ×${data.times} - ${data.total.toFixed(2)} ريال`;
                   const pathS = await saveArabicTextAsImage(line, `service_line_${name}.png`);
@@ -483,10 +510,10 @@ async function run() {
                   });
                   await printer.image(img, "d24");
                 }
-    
+
                 await printer.text("--------------------------------");
               }
-    
+
               // Total Section
               const totalAll = totalProducts + totalServices;
               const totalPath = await saveArabicTextAsImage(`الإجمالي الكلي: ${totalAll.toFixed(2)} ريال`, "total_all.png", 28);
@@ -494,7 +521,24 @@ async function run() {
                 escpos.Image.load(totalPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
               });
               await printer.image(totalImage, "d24");
-    
+
+              const totalsToPrint = [
+                `إجمالي مبيعات المنتجات: ${totalProductSales.toFixed(2)} ريال`,
+                `إجمالي مبيعات الخدمات: ${totalServicesSales.toFixed(2)} ريال`,
+                `إجمالي المدفوع نقداً: ${totalCash.toFixed(2)} ريال`,
+                `إجمالي المدفوع بالبطاقة: ${totalCard.toFixed(2)} ريال`,
+                `الفرق النقدي: ${cashDifference.toFixed(2)} ريال`
+              ];
+              
+              for (const [i, text] of totalsToPrint.entries()) {
+                const imagePath = await saveArabicTextAsImage(text, `summary_line_${i}.png`);
+                const img = await new Promise((resolve, reject) => {
+                  escpos.Image.load(imagePath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
+                });
+                await printer.image(img, "d24");
+              }
+              
+
               await printer.cut();
               await printer.close();
               resolve();
@@ -503,17 +547,17 @@ async function run() {
             }
           });
         });
-    
+
         res.send({ message: "تمت طباعة تقرير الجلسة." });
       } catch (err) {
         console.error("خطأ أثناء طباعة تقرير الجلسة:", err);
         res.status(500).send({ message: "فشل في الطباعة" });
       }
     });
-    
-    
-    
-    
+
+
+
+
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. Successfully connected to MongoDB!");
