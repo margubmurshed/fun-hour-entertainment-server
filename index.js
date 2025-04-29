@@ -575,14 +575,6 @@ app.get("/", (req, res) => {
 
 
 
-
-// HTTPS Server
-const sslOptions = {
-  key: fs.readFileSync("key.pem"),
-  cert: fs.readFileSync("cert.pem"),
-};
-
-https.createServer(sslOptions, app).listen(port, "0.0.0.0", () => {
-  console.log("🚀 خادم ساعة فرح يعمل على HTTPS");
+app.listen(port, "0.0.0.0", () => {
+  console.log("🚀 خادم ساعة فرح يعمل على HTTP");
 });
-
