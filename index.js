@@ -403,7 +403,7 @@ async function run() {
         let totalProductSales = 0;
         receipts.forEach(receipt => {
           receipt.products.forEach(product => {
-            totalProductSales += product.price * product.quantity;
+            totalProductSales += (product.price * product.quantity);
           });
         });
 
@@ -423,8 +423,6 @@ async function run() {
         });
 
         const cashDifference = closingCashAmount - totalCash;
-
-
 
         const device = new escpos.Network("192.168.8.37");
         const printer = new escpos.Printer(device);
