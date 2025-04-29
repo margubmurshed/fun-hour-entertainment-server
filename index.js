@@ -154,20 +154,24 @@ async function run() {
 
 
     const saveArabicTextAsImage = async (text, filename, fontSize = 28) => {
-      const canvas = createCanvas(384, fontSize + 20);
+      const canvasWidth = 576; // For 80mm paper width (Bixolon SRP-E300)
+      const canvas = createCanvas(canvasWidth, fontSize + 30);
       const ctx = canvas.getContext("2d");
-
+    
       ctx.fillStyle = "black";
       ctx.font = `${fontSize}px "Arial"`;
-      ctx.textAlign = "center";
-      ctx.direction = "rtl"; // Arabic right-to-left
-      ctx.fillText(text, 192, fontSize);
-
+      ctx.textAlign = "right"; // Proper alignment for Arabic
+      ctx.direction = "rtl";
+    
+      const padding = 20;
+      ctx.fillText(text, canvasWidth - padding, fontSize + 5); // draw text with padding
+    
       const buffer = canvas.toBuffer("image/png");
       const filePath = path.join(__dirname, 'temp', filename);
       fs.writeFileSync(filePath, buffer);
       return filePath;
     };
+    
 
     const toArabicNumber = (number) => {
       if (number === undefined || number === null) return '';
