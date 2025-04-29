@@ -529,7 +529,7 @@ async function run() {
                 `إجمالي مبيعات الخدمات: ${totalServicesSales.toFixed(2)} ريال`,
                 `إجمالي المدفوع نقداً: ${totalCash.toFixed(2)} ريال`,
                 `إجمالي المدفوع بالبطاقة: ${totalCard.toFixed(2)} ريال`,
-                `الفرق النقدي: ${cashDifference.toFixed(2)} ريال`
+                `الفرق النقدي: ${(cashDifference >= 0 ? '+' : '') + cashDifference.toFixed(2)} ريال`
               ];
               
               for (const [i, text] of totalsToPrint.entries()) {
