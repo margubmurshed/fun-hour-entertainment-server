@@ -282,7 +282,7 @@ async function run() {
                 await printer.image(serviceHeaderImage, "d24");
 
                 for (const service of services) {
-                  const serviceLine = `${service.name} - ${service.price} ريال`;
+                  const serviceLine = `\u202A${service.name} - ${service.price.toFixed(2)} ريال\u202C`;
                   const servicePath = await saveArabicTextAsImage(serviceLine, `service_${counter}.png`);
                   const serviceImage = await new Promise((resolve, reject) => {
                     escpos.Image.load(servicePath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
