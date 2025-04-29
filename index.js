@@ -286,7 +286,7 @@ app.post("/print", async (req, res) => {
             await printer.image(serviceHeaderImage, "d24");
 
             for (const service of services) {
-              const serviceLine = `${counter++}- ${service.name} - ${service.price} ريال`;
+              const serviceLine = `${service.name} - ${service.price} ريال`;
               const servicePath = await saveArabicTextAsImage(serviceLine, `service_${counter}.png`);
               const serviceImage = await new Promise((resolve, reject) => {
                 escpos.Image.load(servicePath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
@@ -304,7 +304,7 @@ app.post("/print", async (req, res) => {
             await printer.image(productsHeaderImage, "d24");
 
             for (const product of products) {
-              const productLine = `${counter++}- ${product.name} ×${product.quantity} - ${(product.price * product.quantity).toFixed(2)} ريال`;
+              const productLine = `${product.name} ×${product.quantity} - ${(product.price * product.quantity).toFixed(2)} ريال`;
               const productPath = await saveArabicTextAsImage(productLine, `product_${counter}.png`);
               const productImage = await new Promise((resolve, reject) => {
                 escpos.Image.load(productPath, (img) => img ? resolve(img) : reject(new Error("Failed to load")));
