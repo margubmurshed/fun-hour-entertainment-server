@@ -43,6 +43,12 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/getReceiptSerial/:receiptId", async(req, res) => {
+      const receiptId = req.params.receiptId;
+      const result = await receiptsCollection.findOne({_id: new ObjectId(receiptId)}, {projection: {serial:1, _id:0}});
+      res.send(result);
+    })
+
     app.get("/cashes", async (req, res) => {
       const result = await cashesCollection.find().toArray();
       res.send(result);
@@ -58,8 +64,20 @@ async function run() {
     });
 
     app.get("/products", async (req, res) => {
-      const result = await productsCollection.find().toArray();
-      res.send(result);
+      const { search = '', page = 1, limit = 20 } = req.query;
+      const filter = search
+        ? {
+            $or: [
+                { name: { $regex: search, $options: 'i' } },
+                { name_ar: { $regex: search, $options: 'i' } }
+            ]
+        }
+        : {};
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+      const products = await productsCollection.find(filter).skip(skip).limit(parseInt(limit)).toArray();
+      const total = await productsCollection.countDocuments(filter);
+      res.json({ products, total });
     });
 
     app.get("/receipts/cash-session/:cashId", async (req, res) => {
