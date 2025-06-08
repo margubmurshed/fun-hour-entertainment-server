@@ -20,6 +20,10 @@ app.use(cors());
 app.use(express.json());
 app.use('/assets', express.static('assets'));
 
+console.log("DB USER:", process.env.DB_USERNAME);
+console.log("DB PASS:", process.env.DB_PASSWORD);
+
+
 const uri = `mongodb+srv://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@cluster0.hrq6pyr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 const client = new MongoClient(uri, {
@@ -221,7 +225,7 @@ async function run() {
         } = receipt;
 
 
-        const device = new escpos.Network("192.168.8.37");
+        const device = new escpos.Network("192.168.8.161");
         const printer = new escpos.Printer(device);
 
         const createdAtFormatted = new Date(createdAt).toLocaleString("ar-EG");
@@ -442,7 +446,7 @@ async function run() {
 
         const cashDifference = closingCashAmount - totalCash;
 
-        const device = new escpos.Network("192.168.8.37");
+        const device = new escpos.Network("192.168.8.161");
         const printer = new escpos.Printer(device);
 
         const logoPath = path.join(__dirname, "assets", "logo.png");
